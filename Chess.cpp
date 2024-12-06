@@ -6,7 +6,7 @@ using namespace std;
 // Constant
 const int BOARD_SIZE = 8;
 char board[BOARD_SIZE][BOARD_SIZE] = {
-    {'Q', '.', '.', '.', '.', '.', '.', '.'},
+    {'Q', 'R', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
@@ -21,14 +21,11 @@ bool isPathClear(int startRow, int startCol, int endRow, int endCol);
 bool isKingInCheck(char king);
 void checkKingsInCheck();
 void printBoard();
-void addPiece(char piece, int row, int col);
-void addPieceByUser();
+bool isCheckmate(char king);
+
 
 int main()
 {
-    printBoard();
-    checkKingsInCheck();
-    addPieceByUser();
     printBoard();
     checkKingsInCheck();
 
@@ -191,17 +188,24 @@ void checkKingsInCheck()
     if (isKingInCheck('k'))
     {
         setConsoleColor(12);
-        std::cout << "Black King is in check!\n\n";
+        if (isCheckmate('k'))
+            std::cout << "Black King is in checkmate!\n\n";
+        else
+            std::cout << "Black King is in check!\n\n";
     }
     else
     {
         setConsoleColor(2);
         std::cout << "Black King is not in check.\n\n";
     }
+
     if (isKingInCheck('K'))
     {
         setConsoleColor(12);
-        std::cout << "White King is in check!\n\n";
+        if (isCheckmate('K'))
+            std::cout << "White King is in checkmate!\n\n";
+        else
+            std::cout << "White King is in check!\n\n";
     }
     else
     {
@@ -210,6 +214,7 @@ void checkKingsInCheck()
     }
     setConsoleColor(7);
 }
+
 
 // Displaying the chessboard
 void printBoard()
@@ -226,21 +231,103 @@ void printBoard()
     cout << '\n';
 }
 
-// Adding a piece to the board
-void addPiece(char piece, int row, int col)
+bool isCheckmate(char king)
 {
-    board[row][col] = piece;
-}
+    // اگر شاه در وضعیت کیش نباشد، چک‌میت نیست
+    if (!isKingInCheck(king))
+        return false;
 
-// Adding a piece by the User
-void addPieceByUser()
-{
-    char piece;
-    int row, col;
-    cout << "Enter the piece to add (e.g. Q, r, n, p): ";
-    cin >> piece;
-    cout << "Enter the row (0-7) and column (0-7) to place the piece: ";
-    cin >> row >> col;
-    cout << "\n";
-    addPiece(piece, row, col);
+    int kingRow = -1, kingCol = -1;
+    for (int i = 0; i < BOARD_SIZE; ++i)
+    {
+        for (int j = 0; j < BOARD_SIZE; ++j)
+        {
+            if (board[i][j] == king)
+            {
+                kingRow = i;
+                kingCol = j;
+                break;
+            }
+        }
+    }
+
+    // 1. بررسی حرکت شاه به خانه امن
+    int kingMoves[8][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1} };
+    for (const auto& move : kingMoves)
+    {
+        int newRow = kingRow + move[0], newCol = kingCol + move[1];
+        if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE)
+        {
+            char originalPiece = board[newRow][newCol];
+            if (originalPiece != '.' && islower(originalPiece) == islower(king))
+                continue;
+
+            board[kingRow][kingCol] = '.';
+            board[newRow][newCol] = king;
+            bool isStillInCheck = isKingInCheck(king);
+            board[newRow][newCol] = originalPiece;
+            board[kingRow][kingCol] = king;
+            if (!isStillInCheck)
+                return false;
+        }
+    }
+
+    // 2. بررسی اینکه آیا مهره‌های یار می‌توانند مهره کیش‌دهنده را بزنند
+    for (int startRow = 0; startRow < BOARD_SIZE; ++startRow)
+    {
+        for (int startCol = 0; startCol < BOARD_SIZE; ++startCol)
+        {
+            char piece = board[startRow][startCol];
+            if (piece != '.' && islower(piece) == islower(king))
+            {
+                for (int endRow = 0; endRow < BOARD_SIZE; ++endRow)
+                {
+                    for (int endCol = 0; endCol < BOARD_SIZE; ++endCol)
+                    {
+                        char targetPiece = board[endRow][endCol];
+                        if (targetPiece != '.' && islower(targetPiece) != islower(king))
+                        {
+                            board[startRow][startCol] = '.';
+                            board[endRow][endCol] = piece;
+                            bool isStillInCheck = isKingInCheck(king);
+                            board[endRow][endCol] = targetPiece;
+                            board[startRow][startCol] = piece;
+                            if (!isStillInCheck)
+                                return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. بررسی اینکه آیا مهره‌های یار می‌توانند مسیر حمله را مسدود کنند
+    for (int startRow = 0; startRow < BOARD_SIZE; ++startRow)
+    {
+        for (int startCol = 0; startCol < BOARD_SIZE; ++startCol)
+        {
+            char piece = board[startRow][startCol];
+            if (piece != '.' && islower(piece) == islower(king))
+            {
+                int directions[8][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1} };
+                for (const auto& direction : directions)
+                {
+                    int endRow = startRow + direction[0], endCol = startCol + direction[1];
+                    if (endRow >= 0 && endRow < BOARD_SIZE && endCol >= 0 && endCol < BOARD_SIZE)
+                    {
+                        char targetPiece = board[endRow][endCol];
+                        board[startRow][startCol] = '.';
+                        board[endRow][endCol] = piece;
+                        bool isStillInCheck = isKingInCheck(king);
+                        board[endRow][endCol] = targetPiece;
+                        board[startRow][startCol] = piece;
+                        if (!isStillInCheck)
+                            return false;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
 }
