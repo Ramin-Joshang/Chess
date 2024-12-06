@@ -6,14 +6,18 @@ using namespace std;
 // Constant
 const int BOARD_SIZE = 8;
 char board[BOARD_SIZE][BOARD_SIZE] = {
-    {'Q', 'R', '.', '.', '.', '.', '.', '.'},
+    {'.', 'R', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
     {'.', '.', '.', '.', '.', '.', '.', '.'},
-    {'.', '.', '.', '.', '.', '.', '.', '.'},
-    {'.', '.', '.', '.', '.', '.', '.', '.'},
+    {'.', '.', 'N', '.', '.', '.', '.', '.'},
+    {'Q', '.', '.', '.', '.', '.', '.', '.'},
     {'k', '.', '.', '.', '.', '.', '.', '.'} };
+
+bool hasKingMoved = false;
+bool hasRookMoved[2] = { false, false }; // برای هر دو رخ
+
 
 // Prototyping
 void setConsoleColor(int color);
@@ -22,7 +26,13 @@ bool isKingInCheck(char king);
 void checkKingsInCheck();
 void printBoard();
 bool isCheckmate(char king);
-
+bool canKingEscape(char king);
+bool isValidPawnMove(int startRow, int startCol, int endRow, int endCol, char piece);
+bool isValidKnightMove(int startRow, int startCol, int endRow, int endCol, char piece);
+bool isValidRookMove(int startRow, int startCol, int endRow, int endCol, char piece);
+bool isValidBishopMove(int startRow, int startCol, int endRow, int endCol, char piece);
+bool isValidQueenMove(int startRow, int startCol, int endRow, int endCol, char piece);
+bool canPiecesSaveKing(char king);
 
 int main()
 {
@@ -215,7 +225,6 @@ void checkKingsInCheck()
     setConsoleColor(7);
 }
 
-
 // Displaying the chessboard
 void printBoard()
 {
@@ -237,6 +246,20 @@ bool isCheckmate(char king)
     if (!isKingInCheck(king))
         return false;
 
+    // بررسی اینکه آیا شاه می‌تواند از کیش فرار کند یا مهره کیش‌دهنده را بزند
+    if (canKingEscape(king))
+        return false;
+
+    // بررسی اینکه آیا سایر مهره‌های یار می‌توانند شاه را نجات دهند
+    if (canPiecesSaveKing(king))
+        return false;
+
+    // اگر هیچکدام از موارد بالا نتوانند شاه را نجات دهند، کیش‌میت رخ داده است
+    return true;
+}
+
+bool canKingEscape(char king)
+{
     int kingRow = -1, kingCol = -1;
     for (int i = 0; i < BOARD_SIZE; ++i)
     {
@@ -251,7 +274,6 @@ bool isCheckmate(char king)
         }
     }
 
-    // 1. بررسی حرکت شاه به خانه امن
     int kingMoves[8][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1} };
     for (const auto& move : kingMoves)
     {
@@ -268,11 +290,72 @@ bool isCheckmate(char king)
             board[newRow][newCol] = originalPiece;
             board[kingRow][kingCol] = king;
             if (!isStillInCheck)
-                return false;
+                return true;
         }
     }
 
-    // 2. بررسی اینکه آیا مهره‌های یار می‌توانند مهره کیش‌دهنده را بزنند
+    // بررسی حرکت قلعه
+    if (kingCol == 4)
+    {
+        if (canCastle(king, kingRow, kingCol, 0) || canCastle(king, kingRow, kingCol, 7))
+            return true;
+    }
+
+    return false;
+}
+
+
+bool isValidPawnMove(int startRow, int startCol, int endRow, int endCol, char piece)
+{
+    int direction = (islower(piece)) ? 1 : -1; // تعیین جهت حرکت پیاده (پیاده سیاه به پایین، پیاده سفید به بالا)
+    int startRowInitial = (islower(piece)) ? 1 : 6; // ردیف شروع پیاده (برای دو خانه حرکت کردن)
+
+    // حرکت به جلو
+    if (startCol == endCol)
+    {
+        if (board[endRow][endCol] == '.' &&
+            ((startRow + direction == endRow) || (startRow == startRowInitial && startRow + 2 * direction == endRow && board[startRow + direction][startCol] == '.')))
+        {
+            return true;
+        }
+    }
+    // زدن مهره حریف به صورت قطری
+    else if (abs(startCol - endCol) == 1 && startRow + direction == endRow && board[endRow][endCol] != '.' && islower(board[endRow][endCol]) != islower(piece))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool isValidKnightMove(int startRow, int startCol, int endRow, int endCol, char piece)
+{
+    // حرکت‌های اسب
+    int rowDiff = abs(endRow - startRow);
+    int colDiff = abs(endCol - startCol);
+    return (rowDiff == 2 && colDiff == 1) || (rowDiff == 1 && colDiff == 2);
+}
+
+bool isValidRookMove(int startRow, int startCol, int endRow, int endCol, char piece)
+{
+    // حرکت‌های رخ
+    return (startRow == endRow || startCol == endCol) && isPathClear(startRow, startCol, endRow, endCol);
+}
+
+bool isValidBishopMove(int startRow, int startCol, int endRow, int endCol, char piece)
+{
+    // حرکت‌های فیل
+    return abs(startRow - endRow) == abs(startCol - endCol) && isPathClear(startRow, startCol, endRow, endCol);
+}
+
+bool isValidQueenMove(int startRow, int startCol, int endRow, int endCol, char piece)
+{
+    // حرکت‌های وزیر
+    return isValidRookMove(startRow, startCol, endRow, endCol, piece) || isValidBishopMove(startRow, startCol, endRow, endCol, piece);
+}
+
+bool canPiecesSaveKing(char king)
+{
     for (int startRow = 0; startRow < BOARD_SIZE; ++startRow)
     {
         for (int startCol = 0; startCol < BOARD_SIZE; ++startCol)
@@ -285,15 +368,39 @@ bool isCheckmate(char king)
                     for (int endCol = 0; endCol < BOARD_SIZE; ++endCol)
                     {
                         char targetPiece = board[endRow][endCol];
-                        if (targetPiece != '.' && islower(targetPiece) != islower(king))
+                        if (targetPiece == '.' || islower(targetPiece) != islower(king))
                         {
-                            board[startRow][startCol] = '.';
-                            board[endRow][endCol] = piece;
-                            bool isStillInCheck = isKingInCheck(king);
-                            board[endRow][endCol] = targetPiece;
-                            board[startRow][startCol] = piece;
-                            if (!isStillInCheck)
-                                return false;
+                            bool validMove = false;
+                            switch (tolower(piece))
+                            {
+                            case 'p':
+                                validMove = isValidPawnMove(startRow, startCol, endRow, endCol, piece);
+                                break;
+                            case 'n':
+                                validMove = isValidKnightMove(startRow, startCol, endRow, endCol, piece);
+                                break;
+                            case 'r':
+                                validMove = isValidRookMove(startRow, startCol, endRow, endCol, piece);
+                                break;
+                            case 'b':
+                                validMove = isValidBishopMove(startRow, startCol, endRow, endCol, piece);
+                                break;
+                            case 'q':
+                                validMove = isValidQueenMove(startRow, startCol, endRow, endCol, piece);
+                                break;
+                            }
+
+                            if (validMove)
+                            {
+                                char temp = board[endRow][endCol];
+                                board[endRow][endCol] = piece;
+                                board[startRow][startCol] = '.';
+                                bool isStillInCheck = isKingInCheck(king);
+                                board[endRow][endCol] = temp;
+                                board[startRow][startCol] = piece;
+                                if (!isStillInCheck)
+                                    return true;
+                            }
                         }
                     }
                 }
@@ -301,33 +408,23 @@ bool isCheckmate(char king)
         }
     }
 
-    // 3. بررسی اینکه آیا مهره‌های یار می‌توانند مسیر حمله را مسدود کنند
-    for (int startRow = 0; startRow < BOARD_SIZE; ++startRow)
+    return false;
+}
+
+bool canCastle(char king, int kingRow, int kingCol, int rookCol)
+{
+    if (hasKingMoved || hasRookMoved[rookCol == 0 ? 0 : 1])
+        return false;
+
+    int direction = (rookCol == 0) ? -1 : 1;
+
+    for (int i = 1; i <= 2; ++i)
     {
-        for (int startCol = 0; startCol < BOARD_SIZE; ++startCol)
-        {
-            char piece = board[startRow][startCol];
-            if (piece != '.' && islower(piece) == islower(king))
-            {
-                int directions[8][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}, {-1, 1}, {1, -1} };
-                for (const auto& direction : directions)
-                {
-                    int endRow = startRow + direction[0], endCol = startCol + direction[1];
-                    if (endRow >= 0 && endRow < BOARD_SIZE && endCol >= 0 && endCol < BOARD_SIZE)
-                    {
-                        char targetPiece = board[endRow][endCol];
-                        board[startRow][startCol] = '.';
-                        board[endRow][endCol] = piece;
-                        bool isStillInCheck = isKingInCheck(king);
-                        board[endRow][endCol] = targetPiece;
-                        board[startRow][startCol] = piece;
-                        if (!isStillInCheck)
-                            return false;
-                    }
-                }
-            }
-        }
+        int col = kingCol + i * direction;
+        if (board[kingRow][col] != '.' || isKingInCheck(king))
+            return false;
     }
 
     return true;
 }
+
